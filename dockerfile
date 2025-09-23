@@ -1,20 +1,12 @@
-FROM ubuntu:20.04
+# Docker para compilar o kernel em i386 (usando amd64 via emulação se necessário)
+FROM --platform=linux/amd64 debian:stable-slim
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    nasm \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential \
     gcc-multilib \
-    qemu-system-x86 \
+    nasm \
     make \
+    binutils \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /kernel
-
-# Copy source files
-COPY . .
-
-# Build kernel
-RUN make clean && make
-
-# Default command to run QEMU
-CMD ["make", "run"]
+WORKDIR /src

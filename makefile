@@ -1,50 +1,37 @@
-# Makefile for Jogo do Bixo do Pablito Kernel
+TARGET     := build/kernel
+ASM_SOURCES:= asm/boot.asm asm/isr.asm
+C_SOURCES  := src/kernel.c
+OBJ        := build/kasm.o build/isr.o build/kernel.o
 
-# Compiler and assembler
-CC = gcc
-ASM = nasm
-LD = ld
+NASM       := nasm
+NASMFLAGS  := -f elf32
 
-# Flags
-CFLAGS = -m32 -c -ffreestanding -fno-stack-protector -fno-builtin
-ASMFLAGS = -f elf32
-LDFLAGS = -m elf_i386 -T link.ld
+CC         := gcc
+CFLAGS     := -m32 -ffreestanding -fno-pic -fno-builtin -fno-stack-protector -nostdlib -nostartfiles -Wall -Wextra -O2
+# -ffreestanding: sem stdlib, ambiente freestanding
+# -fno-stack-protector/-nostdlib: sem dependências do userland
 
-# Target files
-KERNEL = kernel
-KERNEL_ASM = kernel.asm
-KERNEL_C = kernel.c
-LINKER_SCRIPT = link.ld
+LD         := ld
+LDFLAGS    := -m elf_i386 -T link.ld -nostdlib
 
-# Object files
-KERNEL_ASM_OBJ = kasm.o
-KERNEL_C_OBJ = kc.o
+all: $(TARGET)
 
-# Default target
-all: $(KERNEL)
+build:
+	mkdir -p build
 
-# Compile assembly
-$(KERNEL_ASM_OBJ): $(KERNEL_ASM)
-	$(ASM) $(ASMFLAGS) $< -o $@
+$(TARGET): build $(OBJ) link.ld
+	$(LD) $(LDFLAGS) -o $(TARGET) $(OBJ)
 
-# Compile C
-$(KERNEL_C_OBJ): $(KERNEL_C) keyboard_map.h
-	$(CC) $(CFLAGS) $< -o $@
+build/kasm.o: asm/boot.asm | build
+	$(NASM) $(NASMFLAGS) $< -o $@
 
-# Link everything
-$(KERNEL): $(KERNEL_ASM_OBJ) $(KERNEL_C_OBJ) $(LINKER_SCRIPT)
-	$(LD) $(LDFLAGS) -o $@ $(KERNEL_ASM_OBJ) $(KERNEL_C_OBJ)
+build/isr.o: asm/isr.asm | build
+	$(NASM) $(NASMFLAGS) $< -o $@
 
-# Run with QEMU
-run: $(KERNEL)
-	qemu-system-i386 -kernel $(KERNEL)
+build/kernel.o: src/kernel.c src/keyboard_map.h src/vga.h | build
+	$(CC) $(CFLAGS) -c src/kernel.c -o $@
 
-# Clean build files
 clean:
-	rm -f *.o $(KERNEL)
+	rm -rf build
 
-# Install to /boot (requires sudo)
-install: $(KERNEL)
-	sudo cp $(KERNEL) /boot/kernel-bixo
-
-.PHONY: all run clean install
+.PHONY: all clean
