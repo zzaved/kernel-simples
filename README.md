@@ -1,71 +1,139 @@
-# Micro Kernel — "Jogo do Bixo do Pablito" (x86, QEMU)
+# Micro Kernel
 
-Um micro kernel em x86 que:
-- Boota via Multiboot (compatível com GRUB / `qemu -kernel`)
-- Escreve na tela via memória de vídeo (0xB8000)
-- Configura IDT, remapeia o PIC e trata interrupção do teclado (IRQ1 → int 0x21)
-- Implementa um joguinho: escolha um dos 5 **bixos** (1–5) e pressione `s` para sortear. O kernel gera um resultado pseudoaleatório e informa vitória/derrota. `r` reinicia.
+## Objetivo
 
-> Desenvolvido para rodar no **QEMU** sem depender de hardware real.
+Este projeto implementa um micro kernel em x86 que:
 
-## Requisitos (macOS/Apple Silicon)
+* É iniciado por um bootloader em Assembly compatível com Multiboot.
+* Escreve diretamente na tela usando a memória de vídeo (0xB8000).
+* Configura a IDT e o PIC para lidar com a interrupção de teclado (IRQ1).
+* Contém um jogo interativo simples.
 
-- **QEMU**: `brew install qemu`
-- **Docker** (usaremos toolchain via container x86): `Docker Desktop` + `buildx`
+## Ambiente de Desenvolvimento: macOS vs Linux
 
-> Usamos Docker `linux/amd64` para garantir toolchain 32-bit. Isso funciona em Apple Silicon via emulação.
+Este sistema foi desenvolvido em um **MacBook Air com macOS (arquitetura ARM)**.
+Por isso, utilizou-se **Docker** para fornecer um toolchain 32-bit compatível (`gcc -m32`, `nasm`, `ld`).
 
-## Rodando (sem ISO, usando Multiboot diretamente)
+No entanto, em **Linux (x86\_64)** o processo é mais simples e direto, pois o compilador de 32 bits pode ser instalado nativamente.
+
+## Execução no Linux
+
+### Dependências
 
 ```bash
-# 1) Build da toolchain/ambiente
-docker buildx build --platform linux/amd64 -t pablito-kernel:dev -f Dockerfile .
+sudo apt-get update
+sudo apt-get install build-essential gcc-multilib nasm qemu-system-x86
+```
 
-# 2) Compilar
-docker run --rm -v "$PWD:/src" -w /src --platform linux/amd64 pablito-kernel:dev make clean all
+### Compilação
 
-# 3) Executar no QEMU
+```bash
+make clean all
+```
+
+### Execução
+
+```bash
 qemu-system-i386 -kernel build/kernel
 ```
 
-> Dica: se quiser uma janela menor: `-vga std -display default,show-cursor=on`
+## Execução no macOS (Apple Silicon ou Intel)
 
-## Controles do jogo
+### Dependências
 
-- Na tela inicial, pressione **1..5** para escolher seu *bixo*.
-- Pressione **s** para *sortear*.
-- O kernel mostrará o resultado e se você ganhou.
-- Pressione **r** para reiniciar o jogo.
-- `ESC` limpa a tela.
+* Docker Desktop
+* QEMU
 
-O gerador pseudoaleatório usa um **seed** atualizado com os *scancodes* das teclas digitadas.
+  ```bash
+  brew install qemu
+  ```
 
-## Estrutura
+### Construção do ambiente com Docker
+
+```bash
+docker buildx build --platform linux/amd64 -t pablito-kernel:dev -f Dockerfile .
+```
+
+### Compilação
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src --platform linux/amd64 pablito-kernel:dev make clean all
+```
+
+O kernel será gerado em:
+
+```
+build/kernel
+```
+
+### Execução
+
+```bash
+qemu-system-i386 -kernel build/kernel
+```
+
+## Como Jogar
+
+1. Na tela inicial, o jogador deve escolher um bixo (1–5):
+
+   ```
+   1) Leao
+   2) Aguia
+   3) Macaco
+   4) Cobra
+   5) Tubarao
+   ```
+
+2. Após escolher, pressione `s` para o sorteio.
+
+3. O kernel mostra o bixo sorteado e o resultado (vitória ou derrota).
+
+4. Controles adicionais:
+
+   * `r`: reinicia o jogo.
+   * `ESC`: limpa a tela.
+
+## Estrutura do Projeto
 
 ```
 .
-├── Dockerfile
-├── Makefile
-├── link.ld
+├── Dockerfile          # Ambiente de build (gcc -m32, nasm, ld)
+├── Makefile            # Script de compilação
+├── link.ld             # Linker script (kernel carregado em 0x100000)
 ├── asm/
-│   ├── boot.asm         # ponto de entrada + cabeçalho multiboot
-│   └── isr.asm          # in/out de portas + wrapper da ISR de teclado + load_idt
+│   ├── boot.asm        # Bootloader + cabeçalho Multiboot
+│   └── isr.asm         # Funções em assembly (I/O, ISR teclado, load_idt)
 ├── src/
-│   ├── kernel.c         # kmain + VGA, IDT/PIC, teclado, jogo
-│   ├── keyboard_map.h   # mapa de scancodes → chars
-│   └── vga.h            # helpers VGA
+│   ├── kernel.c        # Lógica do kernel e do jogo
+│   ├── vga.h           # Funções de escrita em 0xB8000
+│   └── keyboard_map.h  # Tabela scancode → caractere
 └── README.md
 ```
 
-## Como funciona (resumo técnico)
+## Como Funciona o Kernel
 
-- **boot.asm** define o cabeçalho **Multiboot** (0x1BADB002) nos primeiros 8KB, exporta o símbolo `start`, desabilita interrupções (`cli`), define `esp`, chama `kmain` e dá `hlt`.
-- **link.ld** fixa a base do binário em **0x0010_0000** (1 MiB), alinhado com a prática comum de kernels x86.
-- **isr.asm** implementa `read_port`, `write_port`, `load_idt`, e o *stub* `keyboard_handler` que chama `keyboard_handler_main` (em C) e retorna com `iretd`.
-- **kernel.c**:
-  - Implementa **IDT** e remapeia o **PIC** (ICW1..4) para que IRQ0..15 virem **0x20..0x2F**.
-  - Habilita somente **IRQ1** (teclado) na máscara do PIC.
-  - Configura a entrada **IDT[0x21]** para o handler do teclado.
-  - Escreve diretamente em **0xB8000** (tela modo texto 80x25, 2 bytes por célula).
-  - Loop do jogo: estado, input do usuário via ISR, render simples.
-  - PRNG linear congruente com *seed* vindo dos scancodes.
+1. **Bootloader (boot.asm)**
+
+   * Define o cabeçalho Multiboot (0x1BADB002).
+   * Configura a pilha (ESP).
+   * Chama `kmain()` em C.
+
+2. **Tela / VGA (vga.h)**
+
+   * Escrita direta em `0xB8000`.
+   * Cada caractere ocupa 2 bytes (caractere + atributo de cor).
+   * Suporte a impressão, rolagem e cores.
+
+3. **Interrupções**
+
+   * PIC remapeado (IRQ0–7 → 0x20..0x27).
+   * IDT configurada com handler no vetor `0x21` (teclado).
+   * Handler do teclado lê scancode da porta `0x60` e converte em caractere.
+
+4. **Jogo do Bixo do Pablito**
+
+   * Estados: `WELCOME → CHOOSE → RESULT`.
+   * Jogador escolhe de 1 a 5.
+   * Um gerador pseudoaleatório sorteia o resultado.
+   * Mostra vitória ou derrota.
+   * Permite reinício (`r`).
