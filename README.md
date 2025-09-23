@@ -44,9 +44,9 @@ qemu-system-i386 -kernel build/kernel
 * Docker Desktop
 * QEMU
 
-  ```bash
-  brew install qemu
-  ```
+```bash
+brew install qemu
+```
 
 ### Construção do ambiente com Docker
 
@@ -92,6 +92,8 @@ qemu-system-i386 -kernel build/kernel
 
    * `r`: reinicia o jogo.
    * `ESC`: limpa a tela.
+   * `m`: retorna ao menu principal.
+   * `3`: encerra o kernel (loop infinito).
 
 ## Estrutura do Projeto
 
@@ -132,8 +134,9 @@ qemu-system-i386 -kernel build/kernel
 
 4. **Jogo do Bixo do Pablito**
 
-   * Estados: `WELCOME → CHOOSE → RESULT`.
+   * Estados: `MENU → RULES → CHOOSE → RESULT → EXIT`.
    * Jogador escolhe de 1 a 5.
    * Um gerador pseudoaleatório sorteia o resultado.
    * Mostra vitória ou derrota.
-   * Permite reinício (`r`).
+   * Mantém placar acumulado de vitórias/derrotas.
+   * Permite reinício (`r`) ou retorno ao menu (`m`).
