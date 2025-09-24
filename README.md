@@ -1,5 +1,7 @@
 # Micro Kernel
 
+🎥 PARA ACESSAR O VÍDEO DE EXPLICAÇÃO DO PROJETO [CLIQUE AQUI](https://youtu.be/W4W3duIrCbU)
+
 ## Objetivo
 
 Este projeto implementa um micro kernel em x86 que:
